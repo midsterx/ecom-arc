@@ -8,19 +8,20 @@ from socket import AF_INET, AF_INET6, inet_ntoa
 from scapy.all import *
 from netfilterqueue import NetfilterQueue
 # from packets import IPPacket, TCPPacket, to_tuple
-
+import os
 #from main import PKT_DIR_INCOMING, PKT_DIR_OUTGOING
 from math import ceil
 import re
 import binascii
+import json
 
 
 _NFQ_INIT = 'iptables -I INPUT -j NFQUEUE --queue-num %d'
 _NFQ_CLOSE = 'iptables -D INPUT -j NFQUEUE --queue-num %d'
 
+blocked_stuff = json.loads(open('configrules.json').read())
 
-
-global action, inputprotocol, actiontype, inputportnum, inputipaddr
+global action, inputprotocol, actiontype, inputportnum, checkipaddr
 
 class Firewall:
     def __init__(self):
@@ -29,11 +30,15 @@ class Firewall:
         self.srcportnum = 0
 
     def valid_IP_address(self, ext_addr):
+        if (ext_addr in str(blocked_stuff['iplist']) or ext_addr[0:3] in str(blocked_stuff['prefixes'])):
+            action = "block"
+            return False
         try:
-           socket.inet_ntoa(ext_addr)
-           return True
+            socket.inet_ntoa(ext_addr)
+            return True
         except socket.error:
-           return False
+            action = "block"
+            return False
 
     def obtain_fields(self, pckt):
         try:
@@ -108,15 +113,17 @@ class Firewall:
 
     def packet_direction(self, direction):
         if (direction == 'outgoing'):
+            print("outgoing")
             return 'outgoing'
         else:
+            print("incoming")
             return 'incoming'
 
 
             # @pkt_dir: either PKT_DIR_INCOMING or PKT_DIR_OUTGOING
     # @pkt: the actual data of the IPv4 packet (including IP header)
     def handle_packet(self, pckt_dir, pckt):
-        ip_header = self.valid_ip_header(pckt)
+        ip_header = self.valid_ip_header(str(pckt))
         if (ip_header == None):
             print(1)
             return
@@ -125,12 +132,12 @@ class Firewall:
             print(2)
             return
 
-        protocol, total_length = self.obtain_fields(pckt)
+        protocol, total_length = self.obtain_fields(str(pckt))
         if (protocol == None and total_length == None):
             print(3)
             return
 
-        if (total_length != len(pckt)):
+        if (total_length != len(str(pckt))):
             print(4)
             return
 
@@ -174,7 +181,7 @@ class Firewall:
                     print(10)
                     return
 
-        verdict = "pass"
+        action = "accept"
         self.protocolname = self.protocol_selector(protocol)
         self.srcipaddress = external_addr
         if (protocol != 1):
@@ -200,7 +207,7 @@ def cb(p):
 
         elif actiontype == "ipaddress":
 
-            if inputipaddr == socket.inet_ntoa(f.srcipaddress):  #IP address
+            if checkipaddr == socket.inet_ntoa(f.srcipaddress):  #IP address
                 p.drop()
                 print(socket.inet_ntoa(f.srcipaddress) + " blocked")
 
@@ -218,12 +225,13 @@ def cb(p):
         print("Packet accepted")
 
 
-global action, inputprotocol, actiontype, inputportnum, inputipaddr
+global action, inputprotocol, actiontype, inputportnum, checkipaddr
 
+inputprotocol = "icmp"
 actiontype = "ipaddress"
 action = "block"
 inputportnum = 20
-inputipaddr =  "202.137.235.12"
+checkipaddr =  "10.20.202.89"
 qnum = 1
 setup = _NFQ_INIT % qnum
 os.system(setup)
