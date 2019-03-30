@@ -1,4 +1,9 @@
 {
-    "iplist": ["10.20.202.89"],
-    "prefixes": ["127"]
+    "nfqnum": 1,
+    "actionType": "ipaddress",
+    "ipList": ["10.20.20.201"],
+    "prefixes": ["127"],
+    "portNumList": ["20", "97"],
+    "protocolList": ["icmp"],
+    "blockAll": "false"
 }

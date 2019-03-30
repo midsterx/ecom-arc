@@ -19,25 +19,19 @@ import json
 _NFQ_INIT = 'iptables -I INPUT -j NFQUEUE --queue-num %d'
 _NFQ_CLOSE = 'iptables -D INPUT -j NFQUEUE --queue-num %d'
 
-blocked_stuff = json.loads(open('configrules.json').read())
+config_rules = json.loads(open('configrules.json').read())
 
-global action, inputprotocol, actiontype, inputportnum, checkipaddr
-
-class Firewall:
+class myFirewall:
     def __init__(self):
         self.protocolname = ''
         self.srcipaddress = ''
         self.srcportnum = 0
 
     def valid_IP_address(self, ext_addr):
-        if (ext_addr in str(blocked_stuff['iplist']) or ext_addr[0:3] in str(blocked_stuff['prefixes'])):
-            action = "block"
-            return False
         try:
             socket.inet_ntoa(ext_addr)
             return True
         except socket.error:
-            action = "block"
             return False
 
     def obtain_fields(self, pckt):
@@ -68,10 +62,13 @@ class Firewall:
 
     def protocol_selector(self, protocol):
         if (protocol == 1):
+            # print("icmp")
             return "icmp"
         elif (protocol == 6):
+            # print("tcp")
             return 'tcp'
         elif (protocol == 17):
+            # print("udp")
             return 'udp'
         return None
 
@@ -88,9 +85,8 @@ class Firewall:
         new_str = str(format_str)
         return int(new_str[1: len(new_str) - 2])
 
-        #""" Returns the external port and checks to see if there is a socket error. If
-            #the port is valid, then it returns a number, else it returns 'None'. """
 
+    # Returns the external port and checks to see if there is a socket error.
     def handle_external_port(self, pckt, startIndex):
         try:
             ext_port = pckt[startIndex: startIndex + 2]
@@ -99,8 +95,7 @@ class Firewall:
         except struct.error:
             return None
 
-        #""" Returns the TYPE field for the IMCP packet."""
-
+    # Returns the type of ICMP packet.
     def handle_icmp_packet(self, pckt, startIndex):
         try:
             type_field = pckt[startIndex: startIndex + 1]
@@ -109,8 +104,8 @@ class Firewall:
         except struct.error:
             return None
 
-        #""" Returns the direction of the packet in a string."""
 
+    # Returns the direction of the packet.
     def packet_direction(self, direction):
         if (direction == 'outgoing'):
             print("outgoing")
@@ -119,9 +114,6 @@ class Firewall:
             print("incoming")
             return 'incoming'
 
-
-            # @pkt_dir: either PKT_DIR_INCOMING or PKT_DIR_OUTGOING
-    # @pkt: the actual data of the IPv4 packet (including IP header)
     def handle_packet(self, pckt_dir, pckt):
         ip_header = self.valid_ip_header(str(pckt))
         if (ip_header == None):
@@ -142,7 +134,6 @@ class Firewall:
             return
 
         if (self.protocol_selector(protocol) == None):
-            #self.send_packet(pckt, pckt_dir)
             print(5)
             return
 
@@ -181,7 +172,6 @@ class Firewall:
                     print(10)
                     return
 
-        action = "accept"
         self.protocolname = self.protocol_selector(protocol)
         self.srcipaddress = external_addr
         if (protocol != 1):
@@ -192,54 +182,60 @@ def cb(p):
     data = p.get_payload()
     pkt = IP(data)
 
-    f = Firewall()
+    f = myFirewall()
     f.handle_packet("incoming", str(pkt))
     print(f.protocolname)
     print(socket.inet_ntoa(f.srcipaddress))
     print(f.srcportnum)
 
-    if action == "block":
-        if actiontype == "protocol":
+    if config_rules['blockAll'] == "true":
+        p.drop()
+        print("Blocking All")
 
-            if inputprotocol == f.protocolname:  #TCP, UDP, ICMP
-                p.drop()
-                print(f.protocolname + " Packet blocked")
+    elif config_rules['blockAll'] == "false":
 
-        elif actiontype == "ipaddress":
+        if config_rules['actionType'] == "protocol":
+            for i in config_rules["protocolList"]:
+                if i == f.protocolname:  
+                    p.drop()
+                    print(f.protocolname + " Packet blocked")
+                else:
+                    p.accept()
+                    print(f.protocolname + " Packet accepted")
 
-            if checkipaddr == socket.inet_ntoa(f.srcipaddress):  #IP address
-                p.drop()
-                print(socket.inet_ntoa(f.srcipaddress) + " blocked")
+        elif config_rules['actionType'] == "ipaddress":
+            for i in config_rules["ipList"]:
+                if i == socket.inet_ntoa(f.srcipaddress): 
+                    p.drop()
+                    print(socket.inet_ntoa(f.srcipaddress) + " blocked")
+                else:
+                    p.accept()
+                    print(socket.inet_ntoa(f.srcipaddress) + " accepted")
 
-        elif actiontype == "portnum":
-            if int(inputportnum) in f.srcportnum:
-                p.drop()
-                print(inputportnum + " blocked")
+        elif config_rules['actionType'] == "portnum":
+            for i in config_rules["portNumList"]: 
+                if int(i) in f.srcportnum:
+                    p.drop()
+                    print(i + " blocked")
+                else:
+                    p.accept()
+                    print(i + " accepted")
 
-    elif action == "accept":
-        p.accept()
-        print("Packet accepted")
-
+        # default
+        else:
+            p.accept()
+            print("Packet accepted")
+    
     else:
-        p.accept()
-        print("Packet accepted")
+        print("Weird")
 
-
-global action, inputprotocol, actiontype, inputportnum, checkipaddr
-
-inputprotocol = "icmp"
-actiontype = "ipaddress"
-action = "block"
-inputportnum = 20
-checkipaddr =  "10.20.202.89"
-qnum = 1
-setup = _NFQ_INIT % qnum
+setup = _NFQ_INIT % int(config_rules['nfqnum'])
 os.system(setup)
 print("Setting up IPTables: " + setup)
 print("Initializing NetfilterQueue...")
 nfq = NetfilterQueue()
 print("Binding...")
-nfq.bind(qnum, cb)
+nfq.bind(int(config_rules['nfqnum']), cb)
 
 try:
     nfq.run()
@@ -249,7 +245,7 @@ except KeyboardInterrupt:
 
 print ("Unbinding...")
 nfq.unbind()
-teardown = _NFQ_CLOSE % qnum
+teardown = _NFQ_CLOSE % int(config_rules['nfqnum'])
 os.system(teardown)
 print('\nTore down IPTables: ' + teardown)
 print ("Quitting Firewall")
