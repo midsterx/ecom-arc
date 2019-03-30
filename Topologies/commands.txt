@@ -1,0 +1,15 @@
+SNMP Configuration (on a router's CLI):
+	enable
+	config terminal
+	hostname snmp-server
+	int <interface of router (ex: fa0/0>
+	ip address <ip address of router> <subnet>
+	no shut
+	ctrl^Z
+	config terminal
+	snmp-server community passro ro
+	snmp-server community passrw rw
+	ctrl^Z
+	write
+	
+	
