@@ -1,0 +1,29 @@
+IP Addressing:
+	Router 1 - 192.168.1.49
+	Router 2 - 192.168.1.56
+	Router 3 - 192.168.1.55
+	Router 4 - 192.168.1.54
+	Router 5 - 192.168.1.53
+	Router 6 - 192.168.1.50
+	Router 7 - 192.168.1.57
+
+SNMP Configuration (on a router's CLI):
+	enable
+	config terminal
+	hostname snmp-server
+	int <interface of router (ex: fa0/0>
+	ip address <ip address of router> <subnet>
+	no shut
+	ctrl^Z
+	config terminal
+	snmp-server community passro ro
+	snmp-server community passrw rw
+	ctrl^Z
+	write
+	
+Alter (on a router's CLI):
+	enable 
+	configure terminal
+	snmp-server community passro ro
+	snmp-server community passrw rw
+	ctrl^Z
