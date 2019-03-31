@@ -1,0 +1,5 @@
+1. NAT configuration for wireless communications in the ground floor
+2. External Firewall configuration
+3. A more refined config file
+4. Protection against DDoS attacks in firewall implementation
+5. HSRP (if possible)
