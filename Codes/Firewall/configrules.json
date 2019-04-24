@@ -1,9 +1,11 @@
 {
     "nfqnum": 1,
-    "actionType": "ipaddress",
-    "ipList": ["10.20.20.201"],
-    "prefixes": ["127"],
+    "actionType": "prefix",
+    "ipList": ["172.217.163.171"],
+    "prefixes": ["172"],
     "portNumList": ["20", "97"],
     "protocolList": ["icmp"],
-    "blockAll": "false"
+    "blockAll": "false",
+    "threshold": 10,
+    "threshTime": 0.1
 }
