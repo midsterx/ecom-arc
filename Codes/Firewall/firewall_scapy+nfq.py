@@ -14,7 +14,10 @@ from math import ceil
 import re
 import binascii
 import json
+from collections import defaultdict
 
+ddos_check = defaultdict(list)
+bad_ips = set()
 
 _NFQ_INIT = 'iptables -I INPUT -j NFQUEUE --queue-num %d'
 _NFQ_CLOSE = 'iptables -D INPUT -j NFQUEUE --queue-num %d'
@@ -78,9 +81,6 @@ class myFirewall:
     def within_range(self, start_port, end_port, external_ip):
         return external_ip >= start_port and external_ip <= end_port
 
-    def is_IP_Prefix(self, data):
-        return data.find('/')
-
     def strip_format(self, format_str):
         new_str = str(format_str)
         return int(new_str[1: len(new_str) - 2])
@@ -104,16 +104,27 @@ class myFirewall:
         except struct.error:
             return None
 
-
     # Returns the direction of the packet.
     def packet_direction(self, direction):
         if (direction == 'outgoing'):
-            print("outgoing")
             return 'outgoing'
         else:
-            print("incoming")
             return 'incoming'
 
+    # To handle DDOS attacks
+    def handle_ddos_attack(self, packet, sent_time):
+        global ddos_check
+        global bad_ips
+        try:
+            if ((sent_time - ddos_check[packet][0]) > int(config_rules["threshTime"])):
+                ddos_check[packet].append(sent_time)
+        except:
+            pass
+        if (len(ddos_check[packet]) > int(config_rules["threshold"])):
+            bad_ips.add(packet)
+        print(list(bad_ips))
+
+    # To handle different parts of the Packet
     def handle_packet(self, pckt_dir, pckt):
         ip_header = self.valid_ip_header(str(pckt))
         if (ip_header == None):
@@ -181,19 +192,24 @@ class myFirewall:
 def cb(p):
     data = p.get_payload()
     pkt = IP(data)
-
     f = myFirewall()
-    f.handle_packet("incoming", str(pkt))
-    print(f.protocolname)
-    print(socket.inet_ntoa(f.srcipaddress))
-    print(f.srcportnum)
-
+    
     if config_rules['blockAll'] == "true":
         p.drop()
         print("Blocking All")
+    
+    elif config_rules['blockAll'] == "test":
+        if pkt.src == "127.0.0.1":
+            p.accept()
+            f.handle_packet("incoming", str(pkt))
+            f.handle_ddos_attack(socket.inet_ntoa(f.srcipaddress), time.time())
+            print("Localhost")
+        else:
+            p.drop()
 
     elif config_rules['blockAll'] == "false":
-
+        f.handle_packet("incoming", str(pkt))
+        f.handle_ddos_attack(socket.inet_ntoa(f.srcipaddress), time.time())    
         if config_rules['actionType'] == "protocol":
             for i in config_rules["protocolList"]:
                 if i == f.protocolname:  
@@ -215,6 +231,15 @@ def cb(p):
         elif config_rules['actionType'] == "portnum":
             for i in config_rules["portNumList"]: 
                 if int(i) in f.srcportnum:
+                    p.drop()
+                    print(i + " blocked")
+                else:
+                    p.accept()
+                    print(i + " accepted")
+
+        elif config_rules['actionType'] == "prefix":
+            for i in config_rules["prefixes"]: 
+                if i in socket.inet_ntoa(f.srcipaddress):
                     p.drop()
                     print(i + " blocked")
                 else:
