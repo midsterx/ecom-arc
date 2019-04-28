@@ -211,7 +211,7 @@ def cb(p):
         f.handle_packet("incoming", str(pkt))
         f.handle_ddos_attack(socket.inet_ntoa(f.srcipaddress), time.time())    
         if config_rules['actionType'] == "protocol":
-            for i in config_rules["protocolList"]:
+            for i in config_rules["protocol"]:
                 if i == f.protocolname:  
                     p.drop()
                     print(f.protocolname + " Packet blocked")
@@ -229,8 +229,8 @@ def cb(p):
                     print(socket.inet_ntoa(f.srcipaddress) + " accepted")
 
         elif config_rules['actionType'] == "portnum":
-            for i in config_rules["portNumList"]: 
-                if int(i) in f.srcportnum:
+            for i in config_rules["portNum"]: 
+                if int(i) == f.srcportnum:
                     p.drop()
                     print(i + " blocked")
                 else:
@@ -238,8 +238,8 @@ def cb(p):
                     print(i + " accepted")
 
         elif config_rules['actionType'] == "prefix":
-            for i in config_rules["prefixes"]: 
-                if i in socket.inet_ntoa(f.srcipaddress):
+            for i in config_rules["prefix"]: 
+                if i in socket.inet_ntoa(f.srcipaddress)[0:3]:
                     p.drop()
                     print(i + " blocked")
                 else:
